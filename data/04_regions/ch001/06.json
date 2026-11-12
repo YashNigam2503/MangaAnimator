@@ -1,0 +1,187 @@
+{
+ "page": "06.png",
+ "width": 1393,
+ "height": 2000,
+ "regions": [
+  {
+   "id": 1,
+   "box": [
+    243,
+    130,
+    727,
+    591
+   ],
+   "area": 183957,
+   "area_share": 0.06603,
+   "source": "both",
+   "label": "hard",
+   "window": [
+    0,
+    0,
+    1393,
+    968
+   ],
+   "group": 1
+  },
+  {
+   "id": 2,
+   "box": [
+    68,
+    139,
+    268,
+    582
+   ],
+   "area": 61774,
+   "area_share": 0.02217,
+   "source": "both",
+   "label": "easy",
+   "window": [
+    0,
+    0,
+    1393,
+    968
+   ],
+   "group": 1
+  },
+  {
+   "id": 3,
+   "box": [
+    1101,
+    301,
+    1178,
+    388
+   ],
+   "area": 4424,
+   "area_share": 0.00159,
+   "source": "text",
+   "label": "easy",
+   "window": [
+    0,
+    0,
+    1393,
+    968
+   ],
+   "group": 1
+  },
+  {
+   "id": 4,
+   "box": [
+    855,
+    372,
+    980,
+    498
+   ],
+   "area": 12060,
+   "area_share": 0.00433,
+   "source": "text",
+   "label": "easy",
+   "window": [
+    0,
+    0,
+    1393,
+    968
+   ],
+   "group": 1
+  },
+  {
+   "id": 5,
+   "box": [
+    94,
+    599,
+    146,
+    657
+   ],
+   "area": 2309,
+   "area_share": 0.00083,
+   "source": "text",
+   "label": "easy",
+   "window": [
+    0,
+    0,
+    1393,
+    968
+   ],
+   "group": 1
+  },
+  {
+   "id": 6,
+   "box": [
+    41,
+    871,
+    463,
+    1317
+   ],
+   "area": 161112,
+   "area_share": 0.05783,
+   "source": "both",
+   "label": "hard",
+   "window": [
+    0,
+    648,
+    1120,
+    2000
+   ],
+   "group": 2
+  },
+  {
+   "id": 7,
+   "box": [
+    223,
+    1445,
+    783,
+    1916
+   ],
+   "area": 191237,
+   "area_share": 0.06864,
+   "source": "both",
+   "label": "hard",
+   "window": [
+    0,
+    648,
+    1120,
+    2000
+   ],
+   "group": 2
+  },
+  {
+   "id": 8,
+   "box": [
+    1104,
+    1676,
+    1205,
+    1789
+   ],
+   "area": 9497,
+   "area_share": 0.00341,
+   "source": "both",
+   "label": "easy",
+   "window": [
+    881,
+    1476,
+    1393,
+    1988
+   ],
+   "group": 3
+  },
+  {
+   "id": 9,
+   "box": [
+    75,
+    1798,
+    97,
+    1820
+   ],
+   "area": 402,
+   "area_share": 0.00014,
+   "source": "text",
+   "label": "easy",
+   "window": [
+    0,
+    648,
+    1120,
+    2000
+   ],
+   "group": 2
+  }
+ ]
+}

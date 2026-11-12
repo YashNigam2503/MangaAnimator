@@ -1,0 +1,19 @@
+# Stage 0
+Pillow>=9.5
+PyYAML>=6.0
+tqdm>=4.60
+pytest>=7.0
+
+# Stage 1. Install PyTorch first: the CPU build with
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# or the CUDA build on a GPU machine.
+torch                # runs the detectors and LaMa
+torchvision
+numpy                # mask arithmetic
+opencv-python        # dilation, connected components, polygon filling
+ultralytics          # loads the YOLOv8 speech bubble model
+huggingface_hub      # downloads the speech bubble model
+iopaint              # LaMa inpainting (`iopaint run`); pins Pillow 9.5.0 and diffusers 0.27.2
+shapely              # imported by comic-text-detector
+pyclipper            # imported by comic-text-detector
+torchsummary         # imported by comic-text-detector

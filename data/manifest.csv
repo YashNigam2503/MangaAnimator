@@ -1,0 +1,10 @@
+chapter,file,format,width,height,mode,is_spread,is_colour,needs_upscale,upscale_factor,upscale_applied,final_width,final_height,normalize_scale,page_type,status,notes
+ch001,01.jpg,JPEG,752,1080,RGB,false,true,true,2,2,1393,2000,0.9259,,normalized,
+ch001,02.jpg,JPEG,752,1080,RGB,false,true,true,2,2,1393,2000,0.9259,,normalized,
+ch001,03.jpg,JPEG,752,1080,RGB,false,true,true,2,2,1393,2000,0.9259,,normalized,
+ch001,04.jpg,JPEG,752,1080,RGB,false,true,true,2,2,1393,2000,0.9259,,normalized,
+ch001,05.jpg,JPEG,752,1080,RGB,false,false,true,2,2,1393,2000,0.9259,,normalized,
+ch001,06.jpg,JPEG,752,1080,RGB,false,false,true,2,2,1393,2000,0.9259,story,normalized,
+ch001,07.jpg,JPEG,752,1080,RGB,false,false,true,2,2,1393,2000,0.9259,story,normalized,
+ch001,08.jpg,JPEG,752,1080,RGB,false,false,true,2,2,1393,2000,0.9259,story,normalized,
+ch001,09.jpg,JPEG,752,1080,RGB,false,false,true,2,2,1393,2000,0.9259,story,normalized,

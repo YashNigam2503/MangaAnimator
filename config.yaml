@@ -1,0 +1,69 @@
+min_height: 1600        # pages shorter than this get AI upscaling
+target_height: 2000     # final height of every page
+max_upscale_factor: 4
+max_plain_enlarge: 1.25 # normalize flags pages it has to enlarge by more than this
+
+colour:                 # how inspect decides a page has real colour
+  tolerance: 24         # channel difference above this counts as a coloured pixel
+  min_fraction: 0.01    # share of coloured pixels needed to call the page colour
+  sample_size: 256      # the page is shrunk to this size before checking
+
+upscale:
+  backend: ncnn         # ncnn | torch | none
+  ncnn_binary: tools/realesrgan/realesrgan-ncnn-vulkan.exe   # relative to the project folder, or absolute
+  model: realesr-animevideov3
+  gpu_id: auto          # auto, or a device number as printed by the ncnn binary
+  tile_size: 0          # 0 = automatic; lower it (e.g. 200) if the GPU runs out of memory
+
+detect_bubbles:
+  model_repo: kitsumed/yolov8m_seg-speech-bubble
+  model_file: model.pt
+  conf: 0.25
+  imgsz: 1024
+
+detect_text:
+  model: comic-text-detector
+  repo_dir: tools/comic-text-detector          # clone of github.com/dmMaze/comic-text-detector
+  weights: tools/models/comictextdetector.pt            # used on a GPU
+  weights_cpu: tools/models/comictextdetector.pt.onnx   # same model, much faster on CPU
+  input_size: 1024
+
+page_type:
+  cover_text_fraction: 0.15   # a colour page with more text area than this is tagged cover
+
+mask:
+  bubble_dilate_px: 12     # must swallow the bubble outline and tail
+  text_dilate_px: 8        # raise for lettering with glow or thick outlines
+  min_area_px: 400
+  tail_growth:             # extend each bubble over its white inside, which reaches into the tail
+    enabled: true
+    white_threshold: 200   # pixel value counted as bubble white
+    min_white_share: 0.5   # skip bubbles whose inside is less white than this (dark bubbles)
+    max_growth: 1.3        # give up if the bubble would grow by more than this factor
+    reach_px: 200          # how far beyond the bubble's box a tail may extend
+
+regions:
+  context_factor: 2.0      # window = region box grown by this factor
+  min_window: 512
+  max_window: 1536
+  merge_overlap: 0.5       # windows sharing more than this share of the smaller one are merged
+  hard_area_fraction: 0.04 # region covering more than this share of the page is hard
+
+inpaint:
+  easy_backend: lama       # lama | none
+  hard_backend: diffusion  # diffusion | lama | none
+  lama_model: lama         # model name passed to iopaint
+  diffusion_model: flux-fill   # fall back to an SDXL inpainting model if it does not fit
+  prompt: "clean manga artwork, background continues naturally, no text, no speech bubble"
+  seed: 1234
+
+debug:
+  overlay_alpha: 110       # 0-255 opacity of the red/blue region overlay
+  crop_margin: 40          # pixels of context around a hard region in the contact sheet
+  sheet_rows: 6            # hard regions per contact sheet image
+
+trim_margins:
+  enabled: false
+  threshold: 245        # pixel value treated as "white"
+  padding: 16           # pixels of margin to keep
+  min_content_fraction: 0.5   # skip pages whose content box covers less than this share of the page

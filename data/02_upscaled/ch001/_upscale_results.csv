@@ -1,0 +1,10 @@
+file,input_width,input_height,factor,result,output_width,output_height,backend,model,seconds,note
+01.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,7.2,
+02.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,12.2,
+03.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,17.5,
+04.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,18.5,
+05.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,19.8,
+06.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,5.6,
+07.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,6.6,
+08.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,10.5,
+09.png,752,1080,2,upscaled,1504,2160,ncnn,realesr-animevideov3,11.1,
