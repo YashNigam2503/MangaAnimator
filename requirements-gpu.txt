@@ -1,0 +1,21 @@
+# Main environment on the GPU machine (see setup_gpu.sh). IOPaint is left out on
+# purpose: it pins diffusers 0.27.2, which predates FLUX.1 Fill, so it gets its
+# own environment and is reached through IOPAINT_PYTHON.
+Pillow>=9.5
+PyYAML>=6.0
+tqdm>=4.60
+pytest>=7.0
+torch
+torchvision
+numpy
+opencv-python            # setup_gpu.sh installs the libGL it needs
+ultralytics
+huggingface_hub
+shapely
+pyclipper
+torchsummary
+diffusers>=0.32          # first release with FluxFillPipeline
+transformers             # FLUX and SDXL text encoders
+accelerate               # model offloading, needed to fit FLUX on 24 GB
+sentencepiece            # T5 tokenizer used by FLUX
+protobuf                 # T5 tokenizer used by FLUX

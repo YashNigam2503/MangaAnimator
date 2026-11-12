@@ -8,7 +8,7 @@ from steps import (
     build_masks, convert_png, detect_bubbles, detect_text, inpaint, inspect_pages, make_debug,
     normalize, tag_pages, trim_margins, upscale,
 )
-from steps.common import MANIFEST_NAME, PROJECT_ROOT, Context, Manifest, load_config
+from steps.common import MANIFEST_NAME, PROJECT_ROOT, RAW_DIR, Context, Manifest, list_pages, load_config
 
 STEPS = {
     # stage 0: page preparation
@@ -33,6 +33,9 @@ def main(argv: list[str] | None = None) -> None:
     which.add_argument("--chapter", help="chapter folder name to process")
     which.add_argument("--all", action="store_true", help="process every chapter")
     parser.add_argument("--only", choices=list(STEPS), help="run a single step")
+    parser.add_argument("--from", dest="start", choices=list(STEPS), help="run this step and every step after it")
+    parser.add_argument("--region", help="<page>:<id>: redo one region with the diffusion backend, e.g. 07:3")
+    parser.add_argument("--seed", type=int, help="seed for --region (default: the configured seed plus the region id)")
     parser.add_argument("--force", action="store_true", help="overwrite outputs that already exist")
     parser.add_argument("--limit", type=int, help="process only N pages of each chapter")
     parser.add_argument("--skip", type=int, default=0, help="skip the first N pages of each chapter")
@@ -45,7 +48,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.backend:
         cfg["upscale"]["backend"] = args.backend
     trim_enabled = cfg["trim_margins"]["enabled"]
-    if args.only == "trim" and not trim_enabled:
+    if "trim" in (args.only, args.start) and not trim_enabled:
         raise SystemExit("The trim step is off. Set trim_margins.enabled to true in config.yaml first.")
 
     ctx = Context(
@@ -55,9 +58,24 @@ def main(argv: list[str] | None = None) -> None:
         force=args.force,
         limit=args.limit,
         skip=args.skip,
+        region=args.region,
+        seed=args.seed,
     )
     chapters = None if args.all else [args.chapter]
     names = [args.only] if args.only else [n for n in STEPS if n != "trim" or trim_enabled]
+    if args.start:
+        names = names[names.index(args.start):]
+    if args.region:
+        # Refill that one region, then redraw the debug images of its page.
+        inpaint.run(ctx, chapters)
+        ctx.manifest.save()
+        folder = args.data_dir / RAW_DIR / args.chapter
+        stems = [p.stem for p in list_pages(folder)[0]] if folder.is_dir() else []
+        page = Path(args.region.partition(":")[0]).stem
+        ctx.region, ctx.force = None, True
+        if page in stems:
+            ctx.skip, ctx.limit = stems.index(page), 1
+        names = ["debug"]
     for name in names:
         try:
             STEPS[name](ctx, chapters)

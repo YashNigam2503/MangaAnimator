@@ -125,7 +125,10 @@ How regions are filled:
 - Each region gets a square window of surrounding art. Windows that overlap heavily are merged while the result stays within `max_window`, so neighbours are filled together.
 - Only masked pixels are pasted back. Outside the mask, the output is identical to the input.
 - `05_clean_lama` has every region filled with LaMa. `05_clean` is the final result: easy regions from LaMa, hard regions from the diffusion backend.
-- The diffusion backend is not built yet. Until it is, `05_clean` equals `05_clean_lama` and hard regions are listed as `diffusion_pending` in `regions_report.csv`. Set `inpaint.hard_backend: lama` to accept LaMa for hard regions.
+- The diffusion backend needs a CUDA GPU. Without one, `05_clean` equals `05_clean_lama` and hard regions are listed as `diffusion_pending` in `regions_report.csv`. Set `inpaint.hard_backend: lama` to accept LaMa for hard regions.
+- On a GPU, each hard region is refilled with FLUX.1 Fill, using the LaMa-cleaned page as its surroundings, the configured prompt, and the seed `inpaint.seed` plus the region id. If FLUX cannot be loaded or runs out of memory, SDXL inpainting is used instead and the switch is printed. The report records which model filled each region and with which seed.
+- Windows larger than `inpaint.diffusion_max_side` are shrunk for the diffusion model and the fill is scaled back up.
+- On pages the manifest marks as not colour, every fill is converted to grey, because the models sometimes add a colour tint.
 - The `seconds` column in the report is the LaMa batch time shared out by window size, not a per-region measurement.
 
 Debug images in `data/05_debug/<chapter>/`:
@@ -133,6 +136,16 @@ Debug images in `data/05_debug/<chapter>/`:
 - `<page>_overlay.png`: bubble regions in red, text regions in blue
 - `<page>_compare.png`: original, LaMa result and final result side by side
 - `hard_regions_NN.png`: every hard region at 100%: original, LaMa, final
+
+To redo one region with a different seed (GPU only):
+
+```
+python run.py --chapter ch001 --region 07:3 --seed 42
+```
+
+This refills region 3 of page 07 in `05_clean`, updates the report and redraws that page's debug images. Region ids are in `04_regions/<chapter>/<page>.json` and on the hard-region sheets.
+
+To run one step and everything after it, use `--from <step>`, for example `--from inpaint --force`.
 
 To process pages other than the first ones, combine `--skip` and `--limit`: `python run.py --chapter ch001 --skip 5 --limit 4` runs pages 6 to 9.
 
@@ -149,7 +162,43 @@ Every step uses `cuda` when PyTorch finds a GPU and `cpu` otherwise. On CPU the 
 | [comic-text-detector](https://github.com/dmMaze/comic-text-detector) (weights from manga-image-translator) | text detection | GPL-3.0 |
 | [LaMa](https://github.com/advimman/lama) (big-lama) | inpainting | Apache-2.0 |
 | [IOPaint](https://github.com/Sanster/IOPaint) | runs LaMa | Apache-2.0 |
+| [FLUX.1 Fill [dev]](https://huggingface.co/black-forest-labs/FLUX.1-Fill-dev) | diffusion fill of hard regions | FLUX.1 [dev] Non-Commercial License (gated) |
+| [SDXL inpainting 0.1](https://huggingface.co/diffusers/stable-diffusion-xl-1.0-inpainting-0.1) | fallback for hard regions | OpenRAIL++ |
 | [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) | stage 0 upscaling | BSD-3-Clause |
+
+## Running stage 1 on Vast.ai
+
+The diffusion step needs a GPU with 24 GB of memory. Rent an instance with at least 80 GB of disk: FLUX.1 Fill is about 34 GB, SDXL about 7 GB, and the two Python environments about 12 GB.
+
+**What the instance needs.** The code, plus `data/03_normalized`, `data/04_masks`, `data/04_regions`, `data/04_detections`, `data/04_text_masks` and `data/manifest.csv`. If the repository contains the `data` folder, cloning it brings all of that.
+
+**Setup, once per instance:**
+
+```
+git clone <your repository URL> MangaAnimator
+cd MangaAnimator
+export HF_TOKEN=hf_...          # your Hugging Face token, for FLUX.1 Fill
+bash setup_gpu.sh
+```
+
+Your Hugging Face account must have accepted the FLUX.1 Fill licence on its model page. The token is only ever read from the `HF_TOKEN` environment variable; do not put it in a file in the repository.
+
+`setup_gpu.sh` creates two environments (`.venv` for the pipeline and diffusion, `.venv-iopaint` for LaMa, because IOPaint needs an older `diffusers`), fetches the text detector and downloads the model weights.
+
+**Run:**
+
+```
+export IOPAINT_PYTHON=$(pwd)/.venv-iopaint/bin/python
+.venv/bin/python run.py --chapter ch001 --skip 5 --limit 4 --from inpaint --force
+```
+
+`--from inpaint --force` redoes the fill and the debug images and keeps the masks as they are. `--force` is needed because the cleaned pages from the CPU run already exist. At the end, the inpaint step prints which diffusion model ran, on which GPU, and its peak memory use.
+
+To redo detection and masks on the GPU as well, use `--from bubbles --force`. On a GPU the text detector uses its PyTorch weights, which give slightly different masks from the CPU run.
+
+**Download afterwards:** `data/05_clean`, `data/05_clean_lama`, `data/05_debug`, `data/regions_report.csv`, and all `data/04_*` folders if you redid detection.
+
+**Costs.** Instance storage is lost when the instance is destroyed, so download the results first. Stop the instance when it is idle; a stopped instance still bills for storage, a destroyed one bills nothing.
 
 ## Tests
 

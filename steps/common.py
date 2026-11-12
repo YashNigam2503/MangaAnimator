@@ -209,4 +209,6 @@ class Context:
     force: bool = False
     limit: int | None = None
     skip: int = 0
+    region: str | None = None   # --region <page>:<id>: redo one region with the diffusion backend
+    seed: int | None = None     # --seed for that region
     root: Path = PROJECT_ROOT  # relative paths in the config resolve against this

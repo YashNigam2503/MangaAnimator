@@ -5,12 +5,17 @@ pixels are pasted back: outside the mask the output is identical to the input.
 
 05_clean_lama has every region filled with LaMa. 05_clean takes easy regions
 from LaMa and hard regions from the diffusion backend; when that backend is not
-available the LaMa result is kept and the region is reported as diffusion_pending.
+available (no GPU) the LaMa result is kept and the region is reported as
+diffusion_pending.
+
+With --region <page>:<id> a single region of an already cleaned page is redone
+with the diffusion backend, optionally with another --seed.
 """
 from __future__ import annotations
 
 import csv
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -26,6 +31,8 @@ from steps.common import (
     CLEAN_DIR, CLEAN_LAMA_DIR, MASKS_DIR, NORMALIZED_DIR, REGIONS_DIR, REGIONS_REPORT_NAME, Context,
     pick_device, resolve_chapters, save_png, select_pages,
 )
+from steps.diffusion import make_diffusion_backend
+from steps.inspect_pages import has_colour
 
 STEP = "inpaint"
 REPORT_COLUMNS = [
@@ -54,8 +61,10 @@ class LamaBackend:
             # rectangular seams where crops overlap. The windows are already crops: fill them whole.
             config = Path(tmp) / "config.json"
             config.write_text(json.dumps({"hd_strategy": "Original"}), encoding="utf-8")
+            # IOPaint pins an old diffusers, so on the GPU machine it lives in its own environment.
+            python = os.environ.get("IOPAINT_PYTHON") or sys.executable
             cmd = [
-                sys.executable, "-m", "iopaint", "run", f"--model={self.model}", f"--device={pick_device()}",
+                python, "-m", "iopaint", "run", f"--model={self.model}", f"--device={pick_device()}",
                 f"--image={images}", f"--mask={masks}", f"--output={out}", f"--config={config}",
             ]
             proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -103,6 +112,12 @@ class PageJob:
             raise SystemExit(f"Mask and page differ in size for {chapter}/{src.name}. Rerun the masks step with --force.")
         info = json.loads((ctx.data_dir / REGIONS_DIR / chapter / f"{src.stem}.json").read_text(encoding="utf-8"))
         self.regions = info["regions"]
+        # Fills on a black-and-white page are kept grey: the models sometimes add a colour tint.
+        row = ctx.manifest.find(chapter, src.stem) or {}
+        if row.get("is_colour"):
+            self.grey = row["is_colour"] == "false"
+        else:
+            self.grey = not has_colour(Image.fromarray(self.original), ctx.cfg["colour"])
         self.labels, _ = label_regions(self.mask)
         self.groups: dict[int, list[dict]] = {}
         for region in self.regions:
@@ -126,13 +141,56 @@ class PageJob:
         """Copy the result into the target, but only on the masked pixels of these regions."""
         win = self.window(group)
         own = np.isin(self.labels[win], [r["id"] for r in regions])
-        target[win][own] = np.asarray(result)[own]
+        if self.grey:
+            result = result.convert("L")
+        target[win][own] = np.asarray(result.convert("RGB"))[own]
+
+
+def redo_region(ctx: Context, chapters: list[str] | None, diffusion) -> None:
+    """--region <page>:<id>: refill one region of an already cleaned page with the diffusion backend."""
+    cfg = ctx.cfg["inpaint"]
+    page, _, rid = ctx.region.partition(":")
+    if chapters is None or len(chapters) != 1 or not rid.isdigit():
+        raise SystemExit("--region needs --chapter and the form <page>:<id>, for example --region 07:3")
+    chapter, stem = chapters[0], Path(page).stem
+    src = ctx.data_dir / NORMALIZED_DIR / chapter / f"{stem}.png"
+    lama_path = ctx.data_dir / CLEAN_LAMA_DIR / chapter / src.name
+    final_path = ctx.data_dir / CLEAN_DIR / chapter / src.name
+    for needed in (src, lama_path, final_path):
+        if not needed.is_file():
+            raise SystemExit(f"Missing {needed}. Run the inpaint step on this page first.")
+    job = PageJob(ctx, chapter, src)
+    region = next((r for r in job.regions if r["id"] == int(rid)), None)
+    if region is None:
+        raise SystemExit(f"Page {stem} has no region {rid}. It has regions 1 to {len(job.regions)}.")
+    diffusion = diffusion or make_diffusion_backend(cfg)
+    if diffusion is None:
+        raise SystemExit("--region redoes a region with the diffusion backend, which needs a GPU.")
+    with Image.open(lama_path) as im:
+        lama_page = np.array(im.convert("RGB"))
+    with Image.open(final_path) as im:
+        final_page = np.array(im.convert("RGB"))
+    seed = ctx.seed if ctx.seed is not None else cfg["seed"] + region["id"]
+    start = time.perf_counter()
+    image, mask = job.crop(lama_page, region["group"], only=[region])
+    job.paste(final_page, region["group"], diffusion.fill(image, mask, cfg["prompt"], seed), [region])
+    seconds = time.perf_counter() - start
+    save_png(Image.fromarray(final_page), final_path)
+    report_path = ctx.data_dir / REGIONS_REPORT_NAME
+    report = read_report(report_path)
+    for row in report:
+        if (row["chapter"], row["page"], row["region_id"]) == (chapter, src.name, rid):
+            row.update(backend=diffusion.name, seed=str(seed), seconds=f"{seconds:.2f}", status="done")
+    write_report(report_path, report)
+    print(f"Inpaint: region {rid} of {chapter}/{src.name} refilled with {diffusion.name}, seed {seed}, {seconds:.0f}s")
 
 
 def run(ctx: Context, chapters: list[str] | None = None, lama=None, diffusion=None) -> None:
     cfg = ctx.cfg["inpaint"]
     src_root = ctx.data_dir / NORMALIZED_DIR
     chapters = resolve_chapters(src_root, chapters, "Run stage 0 first.")
+    if ctx.region:
+        return redo_region(ctx, chapters, diffusion)
 
     jobs: list[PageJob] = []
     skipped = 0
@@ -165,6 +223,11 @@ def run(ctx: Context, chapters: list[str] | None = None, lama=None, diffusion=No
         for (job, group), result, px in zip(windows, results, pixels):
             lama_results[(id(job), group)] = result
             lama_seconds[(id(job), group)] = elapsed * px / sum(pixels)
+
+    needs_diffusion = cfg["hard_backend"] == "diffusion" and any(
+        r["label"] == "hard" for job in jobs for r in job.regions)
+    if needs_diffusion and diffusion is None:
+        diffusion = make_diffusion_backend(cfg)
 
     report_path = ctx.data_dir / REGIONS_REPORT_NAME
     report = read_report(report_path)
@@ -224,3 +287,5 @@ def run(ctx: Context, chapters: list[str] | None = None, lama=None, diffusion=No
     print(f"Inpaint: {len(jobs)} pages, {counts['done']} regions filled, "
           f"{counts['diffusion_pending']} hard regions pending diffusion, "
           f"{counts['not_filled']} not filled, {skipped} pages already done")
+    if needs_diffusion and diffusion is not None and hasattr(diffusion, "summary"):
+        print(f"Diffusion: {diffusion.summary()}")

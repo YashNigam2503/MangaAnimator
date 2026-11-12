@@ -143,4 +143,5 @@ def stub_models(monkeypatch):
     monkeypatch.setattr(detect_bubbles, "YoloBubbleDetector", StubBubbleDetector)
     monkeypatch.setattr(detect_text, "ComicTextDetector", StubTextDetector)
     monkeypatch.setattr(inpaint, "LamaBackend", StubLama)
+    monkeypatch.setattr(inpaint, "make_diffusion_backend", lambda cfg: None)   # as on a machine without a GPU
     StubLama.calls = 0

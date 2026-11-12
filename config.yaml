@@ -52,8 +52,18 @@ regions:
 inpaint:
   easy_backend: lama       # lama | none
   hard_backend: diffusion  # diffusion | lama | none
-  lama_model: lama         # model name passed to iopaint
-  diffusion_model: flux-fill   # fall back to an SDXL inpainting model if it does not fit
+  lama_model: anime-lama   # model name passed to iopaint: lama | anime-lama
+  diffusion_model: flux-fill   # flux-fill | sdxl-inpaint. FLUX falls back to SDXL if it cannot load or does not fit
+  diffusion_max_side: 1024     # windows larger than this are shrunk for the diffusion model, then scaled back
+  flux:
+    repo: black-forest-labs/FLUX.1-Fill-dev   # gated: needs HF_TOKEN in the environment
+    steps: 50
+    guidance: 30
+  sdxl:
+    repo: diffusers/stable-diffusion-xl-1.0-inpainting-0.1
+    steps: 30
+    guidance: 8.0
+    strength: 0.99
   prompt: "clean manga artwork, background continues naturally, no text, no speech bubble"
   seed: 1234
 
