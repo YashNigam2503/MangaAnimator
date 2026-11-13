@@ -3,3 +3,11 @@ tools/
 __pycache__/
 .pytest_cache/
 .venv-iopaint/
+data/
+tools/realesrgan/
+*.patch
+.ipynb_checkpoints/
+.hf_cache/
+gpu_env.sh
+*.log
+*.partial

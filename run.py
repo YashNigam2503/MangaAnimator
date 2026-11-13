@@ -5,7 +5,7 @@ import argparse
 from pathlib import Path
 
 from steps import (
-    build_masks, convert_png, detect_bubbles, detect_text, inpaint, inspect_pages, make_debug,
+    build_masks, convert_png, describe_regions, detect_bubbles, detect_text, inpaint, inspect_pages, make_debug,
     normalize, tag_pages, trim_margins, upscale,
 )
 from steps.common import MANIFEST_NAME, PROJECT_ROOT, RAW_DIR, Context, Manifest, list_pages, load_config
@@ -22,6 +22,7 @@ STEPS = {
     "text": detect_text.run,
     "tag": tag_pages.run,
     "masks": build_masks.run,
+    "prompts": describe_regions.run,
     "inpaint": inpaint.run,
     "debug": make_debug.run,
 }
@@ -35,6 +36,9 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--only", choices=list(STEPS), help="run a single step")
     parser.add_argument("--from", dest="start", choices=list(STEPS), help="run this step and every step after it")
     parser.add_argument("--region", help="<page>:<id>: redo one region with the diffusion backend, e.g. 07:3")
+    parser.add_argument("--hard-only", action="store_true",
+                        help="redo only the hard regions of already cleaned pages with the diffusion backend, "
+                             "then redraw the debug images")
     parser.add_argument("--seed", type=int, help="seed for --region (default: the configured seed plus the region id)")
     parser.add_argument("--force", action="store_true", help="overwrite outputs that already exist")
     parser.add_argument("--limit", type=int, help="process only N pages of each chapter")
@@ -60,6 +64,7 @@ def main(argv: list[str] | None = None) -> None:
         skip=args.skip,
         region=args.region,
         seed=args.seed,
+        hard_only=args.hard_only,
     )
     chapters = None if args.all else [args.chapter]
     names = [args.only] if args.only else [n for n in STEPS if n != "trim" or trim_enabled]
@@ -76,7 +81,11 @@ def main(argv: list[str] | None = None) -> None:
         if page in stems:
             ctx.skip, ctx.limit = stems.index(page), 1
         names = ["debug"]
+    if args.hard_only:
+        names = ["prompts", "inpaint", "debug"]
     for name in names:
+        if name == "debug" and args.hard_only:
+            ctx.force = True
         try:
             STEPS[name](ctx, chapters)
         finally:

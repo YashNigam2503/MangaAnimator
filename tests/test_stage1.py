@@ -6,7 +6,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from conftest import CHAPTER, DIFFUSION_COLOUR, LAMA_COLOUR, StubDiffusion, StubLama, layout
-from steps import build_masks, detect_bubbles, detect_text, inpaint, make_debug, tag_pages
+from steps import build_masks, describe_regions, detect_bubbles, detect_text, inpaint, make_debug, tag_pages
 from steps.build_masks import (
     build_mask, dilate, find_regions, merge_windows, rasterise_polygons, remove_specks, window_for,
 )
@@ -45,6 +45,7 @@ def run_stage1(ctx, **inpaint_args):
     detect_text.run(ctx)
     tag_pages.run(ctx)
     build_masks.run(ctx)
+    describe_regions.run(ctx)
     inpaint.run(ctx, **inpaint_args)
     make_debug.run(ctx)
 

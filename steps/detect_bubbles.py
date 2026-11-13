@@ -1,14 +1,13 @@
 """Stage 1, step: 03_normalized -> 04_detections. Speech bubble polygons, one JSON per page."""
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 
 from PIL import Image
 from tqdm import tqdm
 
-from steps.common import DETECTIONS_DIR, NORMALIZED_DIR, Context, pick_device, resolve_chapters, select_pages
+from steps.common import DETECTIONS_DIR, NORMALIZED_DIR, Context, pick_device, resolve_chapters, select_pages, write_json
 
 STEP = "bubbles"
 
@@ -66,11 +65,10 @@ def run(ctx: Context, chapters: list[str] | None = None, detector=None) -> None:
                 width, height = im.size
             for i, det in enumerate(detections, start=1):
                 det["id"] = i
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            dst.write_text(json.dumps({
+            write_json(dst, {
                 "page": src.name, "width": width, "height": height,
                 "model": getattr(detector, "name", ""), "detections": detections,
-            }, indent=1), encoding="utf-8")
+            })
             done += 1
             found += len(detections)
     per_page = f", {seconds / done:.1f}s per page" if done else ""

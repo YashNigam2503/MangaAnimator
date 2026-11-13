@@ -15,7 +15,7 @@ from PIL import Image
 from tqdm import tqdm
 
 from steps.common import (
-    DETECTIONS_DIR, MASKS_DIR, NORMALIZED_DIR, REGIONS_DIR, TEXT_MASKS_DIR, Context,
+    DETECTIONS_DIR, MASKS_DIR, NORMALIZED_DIR, REGIONS_DIR, TEXT_MASKS_DIR, Context, write_json,
     resolve_chapters, save_png, select_pages,
 )
 
@@ -229,10 +229,9 @@ def run(ctx: Context, chapters: list[str] | None = None) -> None:
             final, bubbles, text = build_mask(polygons, text_mask, ctx.cfg["mask"], grey)
             regions = find_regions(final, bubbles, text, ctx.cfg["regions"])
             save_png(Image.fromarray(final, mode="L"), mask_dst)
-            regions_dst.parent.mkdir(parents=True, exist_ok=True)
-            regions_dst.write_text(json.dumps({
+            write_json(regions_dst, {
                 "page": src.name, "width": final.shape[1], "height": final.shape[0], "regions": regions,
-            }, indent=1), encoding="utf-8")
+            })
             done += 1
             total += len(regions)
             hard += sum(r["label"] == "hard" for r in regions)

@@ -12,7 +12,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-For AI upscaling on this machine, download `realesrgan-ncnn-vulkan` for your operating system from the [Real-ESRGAN releases page](https://github.com/xinntao/Real-ESRGAN/releases) (release v0.2.5.0 has the zips), unzip it into `tools/realesrgan/` and point `upscale.ncnn_binary` in `config.yaml` at the executable. Keep the `models` folder next to the executable. On Linux or macOS, run `chmod +x` on it first. It runs on any GPU with Vulkan support, including integrated graphics.
+For AI upscaling on this machine, download `realesrgan-ncnn-vulkan` for your operating system from the [Real-ESRGAN releases page](https://github.com/xinntao/Real-ESRGAN/releases) (release v0.2.5.0 has the zips), and unzip it into `tools/realesrgan/`. `upscale.ncnn_binary` in `config.yaml` gives the path to the executable without an extension; `.exe` is added on Windows, so the same config works on Windows and Linux. Keep the `models` folder next to the executable. On Linux or macOS, run `chmod +x` on it first (on the GPU instance `setup_gpu.sh` does all of this). It runs on any GPU with Vulkan support, including integrated graphics.
 
 ## Running locally
 
@@ -47,6 +47,7 @@ The steps, each reading one folder and writing the next:
 Things to know:
 
 - `00_raw` is never modified.
+- Every output is written to a temporary file (`.<name>.partial`) and renamed when it is complete, so a run that is killed never leaves a half-written file that looks finished.
 - A step skips any page whose output already exists. This also applies after a config change: if you change `target_height` or the upscale model, rerun with `--force`.
 - Two raw files with the same name and different extensions (`01.jpg`, `01.png`) would collide; the first is used and the other is marked `duplicate` in the manifest.
 - Unreadable files are marked `error` in the manifest and the run continues.
@@ -98,7 +99,10 @@ Stage 1 reads `data/03_normalized/` and writes cleaned pages with no bubbles and
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 git clone https://github.com/dmMaze/comic-text-detector tools/comic-text-detector
+python scripts/numpy2_patch.py tools/comic-text-detector
 ```
+
+The second command replaces the NumPy aliases that NumPy 2 removed (`np.bool8`, `np.float_`, `np.int0`) in the clone. It is safe to run again.
 
 Download `comictextdetector.pt` and `comictextdetector.pt.onnx` from the [manga-image-translator beta-0.2.1 release](https://github.com/zyddnys/manga-image-translator/releases/tag/beta-0.2.1) into `tools/models/`. The speech bubble model and LaMa download themselves on first use.
 
@@ -126,7 +130,7 @@ How regions are filled:
 - Only masked pixels are pasted back. Outside the mask, the output is identical to the input.
 - `05_clean_lama` has every region filled with LaMa. `05_clean` is the final result: easy regions from LaMa, hard regions from the diffusion backend.
 - The diffusion backend needs a CUDA GPU. Without one, `05_clean` equals `05_clean_lama` and hard regions are listed as `diffusion_pending` in `regions_report.csv`. Set `inpaint.hard_backend: lama` to accept LaMa for hard regions.
-- On a GPU, each hard region is refilled with FLUX.1 Fill, using the LaMa-cleaned page as its surroundings, the configured prompt, and the seed `inpaint.seed` plus the region id. If FLUX cannot be loaded or runs out of memory, SDXL inpainting is used instead and the switch is printed. The report records which model filled each region and with which seed.
+- On a GPU, each hard region is refilled with FLUX.1 Fill, using the LaMa-cleaned page as its surroundings, the region's own prompt, and the seed `inpaint.seed` plus the region id. The model is loaded once per run. Its text encoders are loaded first, encode every prompt of the run and are released before the image model is loaded, so the two never share memory. If FLUX cannot be loaded or runs out of memory, SDXL inpainting is used instead and the switch is printed. The report records which model filled each region and with which seed.
 - Windows larger than `inpaint.diffusion_max_side` are shrunk for the diffusion model and the fill is scaled back up.
 - On pages the manifest marks as not colour, every fill is converted to grey, because the models sometimes add a colour tint.
 - The `seconds` column in the report is the LaMa batch time shared out by window size, not a per-region measurement.
@@ -168,9 +172,9 @@ Every step uses `cuda` when PyTorch finds a GPU and `cpu` otherwise. On CPU the 
 
 ## Running stage 1 on Vast.ai
 
-The diffusion step needs a GPU with 24 GB of memory. Rent an instance with at least 80 GB of disk: FLUX.1 Fill is about 34 GB, SDXL about 7 GB, and the two Python environments about 12 GB.
+The diffusion step needs a GPU with 24 GB of memory. Rent an instance with at least 80 GB of disk: FLUX.1 Fill is about 34 GB, SDXL about 7 GB, and the two Python environments about 12 GB. `setup_gpu.sh` stops at the start if less than 60 GB is available.
 
-**What the instance needs.** The code, plus `data/03_normalized`, `data/04_masks`, `data/04_regions`, `data/04_detections`, `data/04_text_masks` and `data/manifest.csv`. If the repository contains the `data` folder, cloning it brings all of that.
+**What the instance needs.** The code, plus the pages. `data/` is not part of the repository, so copy it to the instance yourself: `data/00_raw/<chapter>/` to run everything there, or `data/03_normalized`, `data/04_*` and `data/manifest.csv` to run only the inpainting. For example, from the development machine: `scp -P <port> -r data/00_raw root@<host>:/workspace/MangaAnimator/data/`.
 
 **Setup, once per instance:**
 
@@ -183,16 +187,29 @@ bash setup_gpu.sh
 
 Your Hugging Face account must have accepted the FLUX.1 Fill licence on its model page. The token is only ever read from the `HF_TOKEN` environment variable; do not put it in a file in the repository.
 
-`setup_gpu.sh` creates two environments (`.venv` for the pipeline and diffusion, `.venv-iopaint` for LaMa, because IOPaint needs an older `diffusers`), fetches the text detector and downloads the model weights.
+`setup_gpu.sh` creates two environments (`.venv` for the pipeline and diffusion, `.venv-iopaint` for LaMa, because IOPaint needs an older `diffusers`), fetches the text detector and patches it for NumPy 2, downloads the Linux build of Real-ESRGAN into `tools/realesrgan/`, and downloads the model weights into `HF_HOME` (`/workspace/hf_cache` unless you set it). It writes `gpu_env.sh`, which sets `HF_HOME` and `IOPAINT_PYTHON` for later shells. Running it again is safe.
 
 **Run:**
 
 ```
-export IOPAINT_PYTHON=$(pwd)/.venv-iopaint/bin/python
+source gpu_env.sh               # HF_HOME and IOPAINT_PYTHON, in every new shell
+export ANTHROPIC_API_KEY=...    # for the prompts step
 .venv/bin/python run.py --chapter ch001 --skip 5 --limit 4 --from inpaint --force
 ```
 
-`--from inpaint --force` redoes the fill and the debug images and keeps the masks as they are. `--force` is needed because the cleaned pages from the CPU run already exist. At the end, the inpaint step prints which diffusion model ran, on which GPU, and its peak memory use.
+`--from inpaint --force` redoes the fill and the debug images and keeps the masks as they are. `--force` is needed when cleaned pages from an earlier run already exist. When the diffusion model is loaded, and again at the end, the inpaint step prints which model ran, on which GPU, its peak GPU memory and the peak system RAM of the run.
+
+### Long runs
+
+A full chapter takes long enough that the SSH connection can drop, and a run started in the foreground stops with it. Start it in the background and follow the log:
+
+```
+source gpu_env.sh
+nohup .venv/bin/python run.py --chapter ch001 > run_ch001.log 2>&1 &
+tail -f run_ch001.log           # Ctrl+C stops following, not the run
+```
+
+After reconnecting, `tail -f run_ch001.log` picks the log up again, and `pgrep -af run.py` shows whether the run is still going. If the run was stopped or killed, start the same command again: pages that were finished are skipped, and a page that was being written is redone, because outputs only get their final name once they are complete.
 
 To redo detection and masks on the GPU as well, use `--from bubbles --force`. On a GPU the text detector uses its PyTorch weights, which give slightly different masks from the CPU run.
 

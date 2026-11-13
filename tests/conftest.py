@@ -125,23 +125,58 @@ class StubLama:
         return [Image.new("RGB", image.size, LAMA_COLOUR) for image, _ in crops]
 
 
+STUB_PROMPT = "a quiet street continues behind the figure, no additional people"
+
+
 class StubDiffusion:
     name = "stub-diffusion"
 
     def __init__(self):
-        self.seeds = []
+        self.seeds, self.prompts, self.sizes = [], [], []
 
     def fill(self, image, mask, prompt, seed):
         self.seeds.append(seed)
+        self.prompts.append(prompt)
+        self.sizes.append(image.size)
         return Image.new("RGB", image.size, DIFFUSION_COLOUR)
+
+
+class StubDescriber:
+    """Stands in for the vision-language model."""
+    name = "stub-describer"
+    answers = None          # a list of answers to hand out in turn; None = always STUB_PROMPT
+    images = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __call__(self, panel, reminder=""):
+        StubDescriber.images.append(panel)
+        return StubDescriber.answers.pop(0) if StubDescriber.answers else STUB_PROMPT
+
+
+class StubFaces:
+    """Stands in for the face detector. `verdicts` says, per call, whether a face sits in the mask."""
+    verdicts = None         # e.g. [True, False]; None = never a face
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __call__(self, image):
+        found = StubFaces.verdicts.pop(0) if StubFaces.verdicts else False
+        # A face covering the whole image has its centre in the middle of the window, inside the big bubble.
+        return [(0.0, 0.0, float(image.width), float(image.height), 0.9)] if found else []
 
 
 @pytest.fixture(autouse=True)
 def stub_models(monkeypatch):
     """Whatever a test runs, the real detectors and LaMa are never loaded."""
-    from steps import detect_bubbles, detect_text, inpaint
+    from steps import describe_regions, detect_bubbles, detect_text, inpaint
     monkeypatch.setattr(detect_bubbles, "YoloBubbleDetector", StubBubbleDetector)
     monkeypatch.setattr(detect_text, "ComicTextDetector", StubTextDetector)
     monkeypatch.setattr(inpaint, "LamaBackend", StubLama)
     monkeypatch.setattr(inpaint, "make_diffusion_backend", lambda cfg: None)   # as on a machine without a GPU
+    monkeypatch.setattr(inpaint, "AnimeFaceDetector", StubFaces)
+    monkeypatch.setattr(describe_regions, "ClaudeDescriber", StubDescriber)
+    StubDescriber.answers, StubDescriber.images, StubFaces.verdicts = None, [], None
     StubLama.calls = 0

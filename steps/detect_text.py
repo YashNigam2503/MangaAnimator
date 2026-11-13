@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 import time
 import types
+from contextlib import contextmanager
 from pathlib import Path
 
 from PIL import Image
@@ -16,6 +17,25 @@ from steps.common import (
 STEP = "text"
 REPO_URL = "https://github.com/dmMaze/comic-text-detector"
 WEIGHTS_URL = "https://github.com/zyddnys/manga-image-translator/releases/tag/beta-0.2.1"
+
+
+@contextmanager
+def placeholder_module(name: str):
+    """Makes `import <name>` succeed with an empty module for the length of the block.
+
+    The placeholder is always taken out again. Left in sys.modules it has no __spec__, and
+    `import diffusers` later in the same run then fails with "wandb.__spec__ is None".
+    A module of that name that was already imported is put back afterwards.
+    """
+    previous = sys.modules.get(name)
+    sys.modules[name] = types.ModuleType(name)
+    try:
+        yield
+    finally:
+        if previous is not None:
+            sys.modules[name] = previous
+        else:
+            sys.modules.pop(name, None)
 
 
 class ComicTextDetector:
@@ -32,9 +52,9 @@ class ComicTextDetector:
         # The detector is a plain script folder, not a package: import it from where it sits.
         sys.path.insert(0, str(repo))
         # It imports wandb for training logs only; a placeholder saves installing it.
-        sys.modules.setdefault("wandb", types.ModuleType("wandb"))
-        from inference import TextDetector
-        from utils.textmask import REFINEMASK_INPAINT
+        with placeholder_module("wandb"):
+            from inference import TextDetector
+            from utils.textmask import REFINEMASK_INPAINT
         self.refine_mode = REFINEMASK_INPAINT
         self.model = TextDetector(
             model_path=str(weights), input_size=cfg["input_size"], device=device, act="leaky",

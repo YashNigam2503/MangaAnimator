@@ -19,8 +19,8 @@ from PIL import Image
 from tqdm import tqdm
 
 from steps.common import (
-    PNG_DIR, TRIMMED_DIR, UPSCALE_FACTORS, UPSCALED_DIR, Context, choose_upscale_factor,
-    copy_file, select_pages, resolve_chapters, save_png, set_notes,
+    PNG_DIR, TRIMMED_DIR, UPSCALE_FACTORS, UPSCALED_DIR, Context, atomic_path,
+    choose_upscale_factor, copy_file, select_pages, resolve_chapters, save_png, set_notes,
 )
 
 STEP = "upscale"
@@ -45,16 +45,35 @@ class NoneBackend:
         pass
 
 
+def ncnn_binary_path(root: Path, configured: str | None, windows: bool | None = None) -> Path | None:
+    """The realesrgan-ncnn-vulkan executable for this platform.
+
+    config.yaml gives the path without an extension, so the same file works on both machines:
+    .exe is added on Windows, and a path that still ends in .exe loses it elsewhere.
+    """
+    if not configured:
+        return None
+    windows = os.name == "nt" if windows is None else windows
+    path = root / configured
+    has_exe = path.name.lower().endswith(".exe")
+    if windows and not has_exe:
+        return path.with_name(path.name + ".exe")
+    if not windows and has_exe:
+        return path.with_name(path.name[:-4])
+    return path
+
+
 class NcnnBackend:
     """Calls the realesrgan-ncnn-vulkan executable. Runs on any Vulkan GPU, integrated included."""
     name = "ncnn"
 
     def __init__(self, cfg: dict, root: Path):
         up = cfg["upscale"]
-        self.binary = root / up["ncnn_binary"] if up["ncnn_binary"] else None
+        self.binary = ncnn_binary_path(root, up.get("ncnn_binary"))
         self.model = up["model"]
-        self.gpu_id = up["gpu_id"]
-        self.tile_size = up["tile_size"]
+        gpu_id = up.get("gpu_id")
+        self.gpu_id = "auto" if gpu_id is None or gpu_id == "" else gpu_id   # 0 is a valid device number
+        self.tile_size = up.get("tile_size") or 0
         self.scales: set[int] = set()
 
     def check(self) -> None:
@@ -65,8 +84,9 @@ class NcnnBackend:
             )
         if not self.binary.is_file():
             raise BackendUnavailable(
-                f"realesrgan-ncnn-vulkan not found at {self.binary}. Download it from {RELEASES_URL}, "
-                "unzip it into tools/realesrgan/ and fix upscale.ncnn_binary in config.yaml."
+                f"realesrgan-ncnn-vulkan not found at {self.binary}. On the GPU instance, run setup_gpu.sh. "
+                f"Otherwise download the build for this system from {RELEASES_URL}, unzip it into "
+                "tools/realesrgan/ and check upscale.ncnn_binary in config.yaml (path without .exe)."
             )
         # The binary loads models from the folder next to it. animevideov3 ships one
         # file per scale; the x4plus models are a single 4x file.
@@ -144,7 +164,7 @@ class TorchBackend:
     def __init__(self, cfg: dict, root: Path):
         up = cfg["upscale"]
         self.model = TORCH_ALIASES.get(up["model"], up["model"])
-        self.tile_size = up["tile_size"]
+        self.tile_size = up.get("tile_size") or 0
         self.upsampler = None
 
     def check(self) -> None:
@@ -212,8 +232,7 @@ def read_results(chapter_dir: Path) -> dict[str, dict]:
 
 
 def write_results(chapter_dir: Path, results: dict[str, dict]) -> None:
-    chapter_dir.mkdir(parents=True, exist_ok=True)
-    with open(chapter_dir / RESULTS_NAME, "w", newline="", encoding="utf-8") as f:
+    with atomic_path(chapter_dir / RESULTS_NAME) as tmp, open(tmp, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=RESULT_COLUMNS, lineterminator="\n")
         writer.writeheader()
         writer.writerows(results[k] for k in sorted(results))

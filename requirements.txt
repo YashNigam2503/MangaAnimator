@@ -17,3 +17,5 @@ iopaint              # LaMa inpainting (`iopaint run`); pins Pillow 9.5.0 and di
 shapely              # imported by comic-text-detector
 pyclipper            # imported by comic-text-detector
 torchsummary         # imported by comic-text-detector
+anthropic            # Claude API: writes the per-region diffusion prompts
+onnxruntime          # runs the face detector that checks diffusion fills

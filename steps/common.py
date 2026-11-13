@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 import os
 import shutil
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +23,7 @@ DETECTIONS_DIR = "04_detections"
 TEXT_MASKS_DIR = "04_text_masks"
 MASKS_DIR = "04_masks"
 REGIONS_DIR = "04_regions"
+PROMPTS_DIR = "04_prompts"
 CLEAN_LAMA_DIR = "05_clean_lama"
 CLEAN_DIR = "05_clean"
 DEBUG_DIR = "05_debug"
@@ -120,18 +123,37 @@ def _partial(dst: Path) -> Path:
     return dst.with_name(f".{dst.name}.partial")
 
 
-def save_png(im, dst: Path) -> None:
+@contextmanager
+def atomic_path(dst: Path):
+    """Yields a temporary path next to dst. It is renamed to dst only when the block finishes
+    without an error, so a file under its final name is always complete. A run that is killed
+    outright leaves at most a dot-prefixed .partial file, which no step reads."""
     dst.parent.mkdir(parents=True, exist_ok=True)
     tmp = _partial(dst)
-    im.save(tmp, format="PNG")
-    os.replace(tmp, dst)
+    try:
+        yield tmp
+        os.replace(tmp, dst)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def save_png(im, dst: Path) -> None:
+    with atomic_path(dst) as tmp:
+        im.save(tmp, format="PNG")
 
 
 def copy_file(src: Path, dst: Path) -> None:
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    tmp = _partial(dst)
-    shutil.copyfile(src, tmp)
-    os.replace(tmp, dst)
+    with atomic_path(dst) as tmp:
+        shutil.copyfile(src, tmp)
+
+
+def write_text(dst: Path, text: str) -> None:
+    with atomic_path(dst) as tmp:
+        tmp.write_text(text, encoding="utf-8", newline="")
+
+
+def write_json(dst: Path, data, **kwargs) -> None:
+    write_text(dst, json.dumps(data, indent=1, **kwargs))
 
 
 def pick_device() -> str:
@@ -197,8 +219,7 @@ class Manifest:
         # Leave the file alone when nothing changed, so a rerun does no work.
         if self.path.is_file() and self.path.read_text(encoding="utf-8") == text:
             return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(text, encoding="utf-8", newline="")
+        write_text(self.path, text)
 
 
 @dataclass
@@ -211,4 +232,5 @@ class Context:
     skip: int = 0
     region: str | None = None   # --region <page>:<id>: redo one region with the diffusion backend
     seed: int | None = None     # --seed for that region
+    hard_only: bool = False     # --hard-only: redo the hard regions of already cleaned pages
     root: Path = PROJECT_ROOT  # relative paths in the config resolve against this

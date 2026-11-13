@@ -10,9 +10,9 @@ colour:                 # how inspect decides a page has real colour
 
 upscale:
   backend: ncnn         # ncnn | torch | none
-  ncnn_binary: tools/realesrgan/realesrgan-ncnn-vulkan.exe   # relative to the project folder, or absolute
+  ncnn_binary: tools/realesrgan/realesrgan-ncnn-vulkan   # relative to the project folder, or absolute. No extension: .exe is added on Windows
   model: realesr-animevideov3
-  gpu_id: auto          # auto, or a device number as printed by the ncnn binary
+  gpu_id: auto          # auto, or a device number as printed by the ncnn binary. auto is also used when the key is missing
   tile_size: 0          # 0 = automatic; lower it (e.g. 200) if the GPU runs out of memory
 
 detect_bubbles:
@@ -64,8 +64,28 @@ inpaint:
     steps: 30
     guidance: 8.0
     strength: 0.99
-  prompt: "clean manga artwork, background continues naturally, no text, no speech bubble"
-  seed: 1234
+  seed: 1234               # a region's first seed is this plus its region id
+  diffusion_attempts: 3    # a fill with a face inside the mask is retried with the next seed, this many times in all
+
+prompts:                   # one diffusion prompt per hard region, written by a vision-language model
+  model: claude-opus-5-5
+  effort: medium
+  max_tokens: 16000
+  image_max_side: 1024     # the panel is shrunk to this before it is sent
+  outline_px: 6            # width of the red outline drawn around the region
+  retries: 2               # extra tries when an answer uses a forbidden word
+
+faces:                     # detector that checks diffusion fills for invented faces
+  model_repo: deepghs/anime_face_detection
+  model_file: face_detect_v1.4_s/model.onnx
+  imgsz: 1024
+  conf: 0.3
+  iou: 0.5
+
+panels:                    # rough panel boxes, used as the diffusion window and for the prompt image
+  ink_threshold: 128       # pixels darker than this count as ink
+  close_px: 1              # bridges hairline gaps in panel frames
+  min_area_fraction: 0.03  # smaller ink bodies are not panels
 
 debug:
   overlay_alpha: 110       # 0-255 opacity of the red/blue region overlay
