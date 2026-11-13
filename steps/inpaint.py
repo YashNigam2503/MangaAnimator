@@ -209,6 +209,8 @@ class HardFiller:
         self.diffusion.prepare(prompts)
 
     def prompt_for(self, job: PageJob, region: dict) -> str:
+        if self.ctx.cfg["prompts"].get("mode", "claude") == "fixed":
+            return self.ctx.cfg["prompts"]["fixed_prompt"]
         key = (job.chapter, job.src.stem)
         if key not in self.prompts:
             self.prompts[key] = load_prompts(self.ctx, job.chapter, job.src.stem, job.regions)

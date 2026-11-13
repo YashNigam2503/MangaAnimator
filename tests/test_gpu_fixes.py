@@ -455,3 +455,21 @@ def test_peak_ram_is_a_number_or_unknown():
     assert ram is None or ram > 0
     if sys.platform.startswith("linux"):
         assert ram is not None
+
+
+# --- prompts: a fixed prompt needs no API key and no prompts step ---
+
+def test_fixed_prompt_mode_skips_the_api_and_fills_every_hard_region(ctx, pages):
+    ctx.cfg["prompts"]["mode"] = "fixed"
+    run_stage1_without_prompts = None  # noqa: F841
+    from steps import build_masks, describe_regions, detect_bubbles, detect_text, tag_pages, make_debug
+    detect_bubbles.run(ctx)
+    detect_text.run(ctx)
+    tag_pages.run(ctx)
+    build_masks.run(ctx)
+    describe_regions.run(ctx)                                  # no describer, no key: returns at once
+    assert not (ctx.data_dir / "04_prompts").exists()
+    diffusion = StubDiffusion()
+    inpaint.run(ctx, diffusion=diffusion)
+    assert diffusion.prompts and set(diffusion.prompts) == {ctx.cfg["prompts"]["fixed_prompt"]}
+    assert "no additional people" in ctx.cfg["prompts"]["fixed_prompt"]

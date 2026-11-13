@@ -131,6 +131,9 @@ def load_prompts(ctx: Context, chapter: str, stem: str, regions: list[dict]) -> 
 def run(ctx: Context, chapters: list[str] | None = None, describer=None) -> None:
     from steps.inpaint import PageJob  # shares the page, mask and panel handling
     cfg = ctx.cfg["prompts"]
+    if cfg.get("mode", "claude") == "fixed":
+        print("Prompts: mode is 'fixed' in config.yaml, so no prompts are written; every hard region uses prompts.fixed_prompt.")
+        return
     src_root = ctx.data_dir / NORMALIZED_DIR
     chapters = resolve_chapters(src_root, chapters, "Run stage 0 first.")
     written = skipped = 0

@@ -67,7 +67,10 @@ inpaint:
   seed: 1234               # a region's first seed is this plus its region id
   diffusion_attempts: 3    # a fill with a face inside the mask is retried with the next seed, this many times in all
 
-prompts:                   # one diffusion prompt per hard region, written by a vision-language model
+prompts:                   # one diffusion prompt per hard region
+  mode: claude             # claude: written per region by a vision-language model (needs ANTHROPIC_API_KEY)
+                           # fixed: every hard region uses fixed_prompt, no API calls
+  fixed_prompt: "clean manga artwork, background continues naturally, no additional people"
   model: claude-opus-5-5
   effort: medium
   max_tokens: 16000
